@@ -40,8 +40,16 @@ def load_fishery_data(resize=True,test_image=False,test_pickle=False):
         img_dataset = None
         img_labels = None
         pixel_depth = -1
+        filecount = len(os.listdir(fishery_train_dir+os.sep+lbl))
+        print('\tProcessing %d files ...'%filecount)
+
+        #fp = np.memmap(filename=lbl_pickle_filename, dtype='float32', mode='w+', shape=(filecount,cropped_height,cropped_width,num_channels))
+
+        processed_filecount = 0
+        batch_size = 250
         for file in os.listdir(fishery_train_dir+os.sep+lbl):
             if file.endswith(".jpg"):
+                print('\tProcessed %d/%d files'%(processed_filecount,filecount))
                 image_data = ndimage.imread(fishery_train_dir+os.sep+lbl+os.sep+file).astype(float)
                 if not find_min:
                     # there's no specific size it changes
@@ -65,6 +73,7 @@ def load_fishery_data(resize=True,test_image=False,test_pickle=False):
                     if resize:
                         image_data = block_reduce(image_data,(2,2,1))
 
+                    image_data = image_data.reshape(1,image_data.shape[0],image_data.shape[1],image_data.shape[2])
                     if img_dataset is None and img_labels is None:
                         img_dataset = np.asarray(image_data)
                         img_labels = np.asarray(l_i)
@@ -75,23 +84,27 @@ def load_fishery_data(resize=True,test_image=False,test_pickle=False):
                     if test_image:
                         imsave('test_'+lbl+'.png', image_data)
                         break
+                    processed_filecount += 1
+
+                    if processed_filecount>0 and (processed_filecount%batch_size==0 or processed_filecount==filecount):
+                        print("Dataset shape %s"%str(img_dataset.shape))
+                        print("Labels shape %s"%str(img_labels.shape))
+
+                        try:
+                            with open(lbl_pickle_filename.split('.')[0]+'_'+str(processed_filecount)+'.pickle', 'wb') as f:
+                                pickle.dump({'dataset':img_dataset,'labels':img_labels}, f, pickle.HIGHEST_PROTOCOL)
+                        except Exception as e:
+                            print('Unable to save fishery_data (%s): %s' %(lbl,str(e)))
+
+                        img_dataset = None
+                        img_labels = None
+
 
                 else:
                     if image_data.shape[1]<min_width:
                         min_width = image_data.shape[1]
                     if image_data.shape[0]<min_height:
                         min_height = image_data.shape[0]
-
-        img_dataset = np.asarray(img_dataset)
-        img_labels = np.asarray(img_labels)
-        print("Dataset shape %s"%img_dataset.shape)
-        print("Labels shape %s"%img_labels.shape)
-
-        try:
-            with open(lbl_pickle_filename, 'wb') as f:
-                pickle.dump({'dataset':img_dataset,'labels':img_labels}, f, pickle.HIGHEST_PROTOCOL)
-        except Exception as e:
-            print('Unable to save fishery_data (%s): %s' %(lbl,str(e)))
 
         if test_pickle:
             break
